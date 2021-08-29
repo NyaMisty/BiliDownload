@@ -1,4 +1,4 @@
-TARGET := iphone:clang:13.5:7.0
+TARGET := iphone:clang:12.2:7.0
 INSTALL_TARGET_PROCESSES = bili-universal bili-hd2
 
 include $(THEOS)/makefiles/common.mk

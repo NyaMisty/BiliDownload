@@ -1,3 +1,5 @@
+#import <CoreFoundation/CoreFoundation.h>
+#import <Foundation/Foundation.h>
 @interface BBPhoneVideoParserResolve : NSObject
 + (id)shareInstance;
 @property(retain, nonatomic) NSMutableDictionary *cacheVideoSourceDict; // @synthesize cacheVideoSourceDict=_cacheVideoSourceDict;
@@ -17,13 +19,15 @@
 
 @end
 
-@class NSMutableArray;
+@interface IJKMediaAssetStreamSegment : NSObject
+@property(nonatomic) NSString *url; // @synthesize url=_url;
+@end
 
 @interface IJKMediaAssetStream : NSObject
 @property(nonatomic) int bandwidth; // @synthesize bandwidth=_bandwidth;
 @property(nonatomic) int groupId; // @synthesize groupId=_groupId;
-@property(readonly, copy, nonatomic) NSMutableArray *segments; // @synthesize segments=_segments;
-@property(readonly, nonatomic) long long codecType; // @synthesize codecType=_codecType;
+@property(readonly, copy, nonatomic) NSMutableArray<IJKMediaAssetStreamSegment *> *segments; // @synthesize segments=_segments;
+@property(nonatomic) long long codecType; // @synthesize codecType=_codecType;
 @property(readonly, nonatomic) long long streamType; // @synthesize streamType=_streamType;
 @property(readonly, nonatomic) int identifer; // @synthesize identifer=_identifer;
 - (int)segmentCount;
@@ -104,6 +108,8 @@
 - (id)readCacheItem;
 @end
 
+// --------------------- Hook dash video stream selection fix (ver bili-universal 5.53) -----------------------------
+
 /*
 %hook BBPhoneVideoParserResolve
 - (id)getEntitySectionUrlWithCount:(int)count entityKey:(NSString *)key {
@@ -124,7 +130,7 @@
 @end
 
 %hook BFCDownloadEpEntity
-- (id)getSectionUrlWithCount:(int)count {
+- (id)getSectionUrlWithCount:(int)count { // ver bili-universal 5.53
     BBPhoneVideoParserResolve *resolver = [[%c(BFCDownloadManager) shared] getParserResolve];
     id kv = [resolver cacheVideoSourceDict][[self entityKey]];
     BBResolverVideoMetaInfoModel *videoInfo = [kv performSelector:@selector(videoInfo)];
@@ -161,8 +167,7 @@
 %end
 
 
-
-// --------------- Hook Md5 check after download ----------------
+// --------------- Hook Md5 check after download (ver bili-universal 5.53) ----------------
 
 @interface BFCDownloadBaseEntity
 - (NSString *)getSectionMD5:(long long)index;
@@ -187,7 +192,34 @@
 }
 %end
 
-// ----------------- Hook allow download -----------------------
+// ----------------- Hook additional check on H265's downloading (ver bili-hd2 3.8.0) ----------------------
+
+// Real check occurs in here, checking if codecType is 3 (H265), but dashVideoStreams method are returning copy of array each time....
+// %hook BBPhoneVideoParserResolve
+// - (bool)updateEpEntity:(id)arg1 item:(BBResolverMediaPlayerItem *)arg2 videoInfo:(id)arg3 audioInfo:(id)arg4 error:(id *)arg5 {
+//     IJKMediaAssetStream * stream = [[arg2 dashVideoStreams] firstObject];
+//     long long oriCodec = stream.codecType;
+//     NSLog(@"oriCodec %lld", oriCodec);
+//     // MSHookIvar<NSInteger>([[arg2 dashVideoStreams] firstObject], "_codecType") = 2;
+//     *(long long *)((char *)(__bridge void *)stream + 0x28) = 2;
+//     NSLog(@"newCodec %lld %lld", MSHookIvar<long long>([[arg2 dashVideoStreams] firstObject], "_codecType"), [[[arg2 dashVideoStreams] firstObject] codecType]);
+//     BOOL ret = %orig;
+//     MSHookIvar<NSInteger>(stream, "_codecType") = oriCodec;
+//     NSLog(@"finalCodec %lld", [[[arg2 dashVideoStreams] firstObject] codecType]);
+//     return ret;
+// }
+// %end
+
+
+// so simply patch everything to H264 forcely
+%hook IJKMediaAssetStream
+- (long long)codecType {
+    return 2;
+}
+%end
+
+
+// ----------------- Hook all allow download -----------------------
 
 
 %hook QLMovieItem
@@ -251,6 +283,8 @@
 }
 %end
 
+
+// hook Episode & Season's allow_download
 %hook BBPgcPhoneBangumiRights
 - (bool)allow_review {
     return YES;
@@ -266,3 +300,10 @@
 }
 %end
 
+
+// additional check, since bili-hd2 3.8.0
+%hook BBPgcPhoneDanMuRights
+- (bool)allow_download {
+    return YES;
+}
+%end

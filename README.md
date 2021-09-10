@@ -9,3 +9,4 @@ Tested on following versions:
 - bili-hd2 3.8.0
 - bili-hd2 3.23.0
 - bili-hd2 3.24.0
+- bili-hd2 3.25.0
